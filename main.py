@@ -27,7 +27,8 @@ bucket_name = os.getenv("GCP_BUCKET_NAME")
 assetto_corsa_dir = os.getenv("ASSETTO_CORSA_DIR")
 vm_instance_name = os.getenv("GCP_VM_INSTANCE_NAME")  # VM instance name
 vm_zone = os.getenv("GCP_VM_ZONE")  # VM zone
-vm_destination_path = os.getenv("GCP_VM_DESTINATION_PATH")  # VM destination path
+# vm_destination_path = os.getenv("GCP_VM_DESTINATION_PATH")  # VM destination path
+vm_destination_path = "/home/nic/assetto"  # Hardcoded for now
 vm_user = os.getenv("GCP_VM_USER")  # VM user
 
 # Verify that all required environment variables are set
@@ -207,7 +208,7 @@ def upload_to_gcp_vm(local_file_path, destination_path):
         # Convert local file path to Unix style (forward slashes)
         corrected_local_file_path = local_file_path.replace("\\", "/")
 
-        # Ensure the remote path is properly formatted for Unix
+        # Use the full destination path from the .env file
         corrected_destination_path = destination_path.replace("\\", "/")
 
         # Ensure remote path starts with a Unix root (/)
@@ -245,6 +246,7 @@ def upload_to_gcp_vm(local_file_path, destination_path):
         logging.error(
             f"Error: {e}. Ensure that the gcloud CLI is installed and in your PATH."
         )
+        raise
     except subprocess.CalledProcessError as e:
         logging.error(f"Error uploading file to GCP VM: {e.stderr.decode()}")
         # Provide additional error details if permission is denied
@@ -252,6 +254,7 @@ def upload_to_gcp_vm(local_file_path, destination_path):
             logging.error(
                 "Permission denied. Check directory ownership and permissions on the remote VM."
             )
+        raise
 
 
 def unzip_file(zip_file_path, extract_to):
@@ -375,11 +378,13 @@ def stop_service_remote():
 
 def replace_directories_remote():
     """Replaces the 'cfg', 'content', 'system' directories on the remote VM."""
+    # Use the full path to the home directory from the .env file
     remote_commands = [
         "sudo rm -rf /opt/ac/cfg /opt/ac/content /opt/ac/system",  # Remove existing directories
-        "sudo mv ~/assetto/cfg /opt/ac/",  # Move the new 'cfg' directory
-        "sudo mv ~/assetto/content /opt/ac/",  # Move the new 'content' directory
-        "sudo mv ~/assetto/system /opt/ac/",  # Move the new 'system' directory
+        f"sudo mv {vm_destination_path}/cfg /opt/ac/",  # Move the new 'cfg' directory
+        f"sudo mv {vm_destination_path}/content /opt/ac/",  # Move the new 'content' directory
+        f"sudo mv {vm_destination_path}/system /opt/ac/",  # Move the new 'system' directory
+        "sudo chown -R ac:ac /opt/ac/",  # Change ownership
     ]
 
     for command in remote_commands:
@@ -482,13 +487,13 @@ def main():
         print_json_content(content_json_path)
 
         # Create the remote directory on the VM if it doesn't exist
-        create_remote_directory(vm_instance_name, vm_zone, "/home/nic/assetto")
+        create_remote_directory(vm_instance_name, vm_zone, vm_destination_path)
 
         # Upload folders to GCP VM
         for folder in ["cfg", "content", "system"]:
             folder_path = os.path.join(unzip_directory, folder)
             if os.path.exists(folder_path):
-                upload_to_gcp_vm(folder_path, "/home/nic/assetto")
+                upload_to_gcp_vm(folder_path, vm_destination_path)
             else:
                 logging.warning(f"Folder {folder} does not exist. Skipping upload.")
 
