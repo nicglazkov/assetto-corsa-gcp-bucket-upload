@@ -411,6 +411,53 @@ def start_service_remote():
     else:
         logging.info("Assetto Corsa service started successfully on the remote server.")
 
+    # Display full output of the service status
+    # get_full_service_status_remote()
+
+
+def get_full_service_status_remote():
+    """Fetches and displays the full output of the Assetto Corsa service status on the remote VM."""
+    try:
+        # Dynamically find the gcloud path
+        gcloud_path = find_gcloud_path()
+
+        # Define the command to check the full service status
+        status_command = "sudo systemctl status assetto.service --no-pager"
+
+        # Construct the SSH command
+        ssh_command = [
+            gcloud_path,
+            "compute",
+            "ssh",
+            vm_instance_name,
+            "--zone",
+            vm_zone,
+            "--command",
+            status_command,
+        ]
+
+        # Execute the command
+        logging.info(f"Executing remote command: {' '.join(ssh_command)}")
+        result = subprocess.run(
+            ssh_command,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        # Decode and log the full service status output
+        status_output = result.stdout.decode()
+        logging.info(f"Full service status:\n{status_output}")
+
+    except FileNotFoundError as e:
+        logging.error(
+            f"Error: {e}. Ensure that the gcloud CLI is installed and in your PATH."
+        )
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error fetching full service status: {e.stderr.decode()}")
+    except Exception as e:
+        logging.error(f"Unexpected error fetching full service status: {e}")
+
 
 def check_service_status_remote():
     """Checks if the Assetto Corsa service is running or has failed on the remote VM."""
