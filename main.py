@@ -330,6 +330,73 @@ def print_json_content(file_path):
         logging.error(f"Error reading JSON file {file_path}: {e}")
 
 
+def execute_remote_command(vm_instance_name, vm_zone, remote_command):
+    """Executes a command on the remote VM using gcloud compute ssh."""
+    try:
+        # Dynamically find the gcloud path
+        gcloud_path = find_gcloud_path()
+
+        # Construct the SSH command
+        ssh_command = [
+            gcloud_path,
+            "compute",
+            "ssh",
+            vm_instance_name,
+            "--zone",
+            vm_zone,
+            "--command",
+            remote_command,
+        ]
+
+        # Execute the command
+        logging.info(f"Executing remote command: {' '.join(ssh_command)}")
+        result = subprocess.run(
+            ssh_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        logging.info("Remote command executed successfully.")
+        logging.info(result.stdout.decode())  # Print the output for debugging
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error executing remote command: {e.stderr.decode()}")
+        return False
+    except Exception as e:
+        logging.error(f"Unexpected error executing remote command: {e}")
+        return False
+    return True
+
+
+def stop_service_remote():
+    """Stops the Assetto Corsa service on the remote VM."""
+    if not execute_remote_command(
+        vm_instance_name, vm_zone, "sudo systemctl stop assetto.service"
+    ):
+        logging.error("Failed to stop the Assetto Corsa service on the remote server.")
+        raise RuntimeError("Stopping the service failed.")
+
+
+def replace_directories_remote():
+    """Replaces the 'cfg', 'content', 'system' directories on the remote VM."""
+    remote_commands = [
+        "sudo rm -rf /opt/ac/cfg /opt/ac/content /opt/ac/system",  # Remove existing directories
+        "sudo mv ~/assetto/cfg /opt/ac/",  # Move the new 'cfg' directory
+        "sudo mv ~/assetto/content /opt/ac/",  # Move the new 'content' directory
+        "sudo mv ~/assetto/system /opt/ac/",  # Move the new 'system' directory
+    ]
+
+    for command in remote_commands:
+        if not execute_remote_command(vm_instance_name, vm_zone, command):
+            logging.error(f"Failed to execute command: {command}")
+            raise RuntimeError("Directory replacement failed.")
+
+
+def start_service_remote():
+    """Starts the Assetto Corsa service on the remote VM."""
+    if not execute_remote_command(
+        vm_instance_name, vm_zone, "sudo systemctl start assetto.service"
+    ):
+        logging.error("Failed to start the Assetto Corsa service on the remote server.")
+        raise RuntimeError("Starting the service failed.")
+
+
 def main():
     try:
         # Get user input for zip file
@@ -425,8 +492,19 @@ def main():
             else:
                 logging.warning(f"Folder {folder} does not exist. Skipping upload.")
 
+        # Stop the Assetto Corsa service on the remote server
+        stop_service_remote()
+
+        # Replace directories on the remote server
+        replace_directories_remote()
+
+        # Start the Assetto Corsa service on the remote server
+        start_service_remote()
+
+    except RuntimeError as e:
+        logging.error(f"A runtime error occurred: {e}")
     except Exception as e:
-        logging.error(f"An error occurred: {e}")
+        logging.error(f"An unexpected error occurred: {e}")
 
 
 if __name__ == "__main__":
