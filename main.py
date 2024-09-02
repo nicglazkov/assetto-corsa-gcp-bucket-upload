@@ -47,6 +47,39 @@ if (
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = gcp_credentials_path
 
 
+def find_gcloud_path():
+    """Find the path to the gcloud executable using the 'where' command."""
+    try:
+        # Use subprocess to execute the 'where' command
+        result = subprocess.run(
+            ["where", "gcloud"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        # Decode the output and get all results
+        paths = result.stdout.decode().splitlines()
+
+        # Filter to find the correct executable path (gcloud.exe or gcloud.cmd)
+        for path in paths:
+            if path.endswith("gcloud.exe") or path.endswith("gcloud.cmd"):
+                logging.info(f"Found gcloud executable at: {path}")
+                return path
+
+        # If no valid executable was found, raise an error
+        logging.error(
+            "Could not find a valid gcloud executable. Ensure it is installed and in your PATH."
+        )
+        exit(1)
+
+    except (FileNotFoundError, subprocess.CalledProcessError) as e:
+        logging.error(
+            f"Could not find gcloud executable. Ensure it is installed and in your PATH. Error: {e}"
+        )
+        exit(1)
+
+
 def find_non_base_content(zip_file_path):
     """Identify non-base game content in the zip file."""
     car_files_to_upload = set()
@@ -125,9 +158,12 @@ def upload_file_to_gcs(file_path, bucket_name, destination_path):
 def upload_to_gcp_vm(local_file_path, destination_path):
     """Uploads the given file or directory to a specified GCP VM instance using gcloud compute scp."""
     try:
+        # Dynamically find the gcloud path
+        gcloud_path = find_gcloud_path()
+
         # Construct the command to upload the file/directory to the VM instance
         scp_command = [
-            "gcloud",
+            gcloud_path,
             "compute",
             "scp",
             "--recurse",  # Add --recurse to copy directories
