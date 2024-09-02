@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from base_content import BASE_GAME_CARS, BASE_GAME_TRACKS  # Import base content
 import subprocess
 import json  # Import for reading and writing JSON files
+import urllib.parse  # Import for URL encoding
 
 # Load environment variables from .env file
 load_dotenv()
@@ -154,7 +155,7 @@ def unzip_file(zip_file_path, extract_to):
 
 
 def update_json_file(json_path, car_files, track_files):
-    """Update the content.json file with missing URLs."""
+    """Update the content.json file with missing URLs, including URL encoding."""
     try:
         # Check if the JSON file exists and has content
         if os.path.exists(json_path) and os.path.getsize(json_path) > 0:
@@ -180,16 +181,18 @@ def update_json_file(json_path, car_files, track_files):
 
         # Update cars
         for car in car_files:
+            encoded_car_name = urllib.parse.quote(car)  # URL-encode the car name
             if car not in content["cars"] or not content["cars"][car].get("url"):
                 content["cars"][car] = {
-                    "url": f"https://storage.googleapis.com/{bucket_name}/cars/{car}.zip"
+                    "url": f"https://storage.googleapis.com/{bucket_name}/cars/{encoded_car_name}.zip"
                 }
 
         # Update tracks
         for track in track_files:
+            encoded_track_name = urllib.parse.quote(track)  # URL-encode the track name
             if track not in content["track"] or not content["track"].get("url"):
                 content["track"][track] = {
-                    "url": f"https://storage.googleapis.com/{bucket_name}/tracks/{track}.zip"
+                    "url": f"https://storage.googleapis.com/{bucket_name}/tracks/{encoded_track_name}.zip"
                 }
 
         # Save the updated content back to the JSON file
