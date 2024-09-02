@@ -156,11 +156,27 @@ def unzip_file(zip_file_path, extract_to):
 def update_json_file(json_path, car_files, track_files):
     """Update the content.json file with missing URLs."""
     try:
-        if os.path.exists(json_path):
+        # Check if the JSON file exists and has content
+        if os.path.exists(json_path) and os.path.getsize(json_path) > 0:
             with open(json_path, "r") as json_file:
-                content = json.load(json_file)
+                try:
+                    content = json.load(json_file)
+                except json.JSONDecodeError:
+                    print(
+                        f"Error: {json_path} is not a valid JSON file. Resetting to an empty JSON structure."
+                    )
+                    content = {"cars": {}, "track": {}}
         else:
+            print(
+                f"{json_path} does not exist or is empty. Initializing a new JSON structure."
+            )
             content = {"cars": {}, "track": {}}
+
+        # Ensure the "cars" and "track" keys exist
+        if "cars" not in content:
+            content["cars"] = {}
+        if "track" not in content:
+            content["track"] = {}
 
         # Update cars
         for car in car_files:
