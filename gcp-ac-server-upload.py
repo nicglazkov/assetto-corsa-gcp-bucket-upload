@@ -1,6 +1,21 @@
 import os
+import shutil
 from zipfile import ZipFile
 from google.cloud import storage
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Now, the environment variable GOOGLE_APPLICATION_CREDENTIALS will be available
+gcp_credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
+if not gcp_credentials_path:
+    print("Error: The GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
+    exit(1)
+
+# Set the environment variable for Google Cloud authentication
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = gcp_credentials_path
 
 # Define base content
 BASE_GAME_CARS = {
@@ -209,33 +224,40 @@ BASE_GAME_TRACKS = {
 }
 
 
-def extract_and_filter_zip(file_path, cars_dir, tracks_dir):
-    """Extracts files from zip and filters out base game content."""
+def find_non_base_content(zip_file_path):
+    """Identify non-base game content in the zip file."""
     car_files_to_upload = []
     track_files_to_upload = []
 
     try:
-        with ZipFile(file_path, "r") as zip_ref:
+        with ZipFile(zip_file_path, "r") as zip_ref:
             # Iterate over each file in the zip archive
             for file in zip_ref.namelist():
                 if file.startswith("content/cars/"):
                     car_name = file.split("/")[2]
                     if car_name not in BASE_GAME_CARS:
-                        # Extract the file and keep track of its absolute path
-                        extracted_path = zip_ref.extract(file, cars_dir)
-                        car_files_to_upload.append(extracted_path)
+                        car_files_to_upload.append(car_name)
                 elif file.startswith("content/tracks/"):
                     track_name = file.split("/")[2]
                     if track_name not in BASE_GAME_TRACKS:
-                        # Extract the file and keep track of its absolute path
-                        extracted_path = zip_ref.extract(file, tracks_dir)
-                        track_files_to_upload.append(extracted_path)
+                        track_files_to_upload.append(track_name)
 
         return car_files_to_upload, track_files_to_upload
 
     except Exception as e:
-        print(f"Error extracting or filtering zip file: {e}")
+        print(f"Error reading zip file: {e}")
         return [], []
+
+
+def zip_directory(source_dir, output_filename):
+    """Zip the specified directory."""
+    try:
+        shutil.make_archive(output_filename, "zip", source_dir)
+        print(f"Zipped {source_dir} to {output_filename}.zip")
+        return f"{output_filename}.zip"
+    except Exception as e:
+        print(f"Error zipping directory {source_dir}: {e}")
+        return None
 
 
 def file_exists_in_gcs(bucket_name, destination_blob_name):
@@ -250,30 +272,25 @@ def file_exists_in_gcs(bucket_name, destination_blob_name):
         return False
 
 
-def upload_files_to_gcs(files, bucket_name, destination_path):
-    """Uploads files to the specified Google Cloud Storage bucket."""
+def upload_file_to_gcs(file_path, bucket_name, destination_path):
+    """Uploads a single file to the specified Google Cloud Storage bucket."""
     client = storage.Client()
     bucket = client.get_bucket(bucket_name)
 
-    for file_path in files:
-        destination_blob_name = os.path.join(
-            destination_path, os.path.basename(file_path)
-        )
+    destination_blob_name = os.path.join(destination_path, os.path.basename(file_path))
 
-        # Check if file already exists in GCS
-        if file_exists_in_gcs(bucket_name, destination_blob_name):
-            print(
-                f"File {destination_blob_name} already exists in GCS. Skipping upload."
-            )
-            continue
+    # Check if file already exists in GCS
+    if file_exists_in_gcs(bucket_name, destination_blob_name):
+        print(f"File {destination_blob_name} already exists in GCS. Skipping upload.")
+        return
 
-        try:
-            blob = bucket.blob(destination_blob_name)
-            blob.upload_from_filename(file_path)
-            blob.make_public()
-            print(f"File {file_path} uploaded to {blob.public_url}")
-        except Exception as e:
-            print(f"Error uploading file {file_path} to GCS: {e}")
+    try:
+        blob = bucket.blob(destination_blob_name)
+        blob.upload_from_filename(file_path)
+        blob.make_public()
+        print(f"File {file_path} uploaded to {blob.public_url}")
+    except Exception as e:
+        print(f"Error uploading file {file_path} to GCS: {e}")
 
 
 def main():
@@ -285,23 +302,33 @@ def main():
         print(f"Error: The file {zip_file_path} does not exist.")
         return
 
-    cars_output_dir = "cars_output"  # Define local output directory for cars
-    tracks_output_dir = "tracks_output"  # Define local output directory for tracks
-
-    # Ensure directories exist
-    os.makedirs(cars_output_dir, exist_ok=True)
-    os.makedirs(tracks_output_dir, exist_ok=True)
-
-    # Extract and filter the zip file contents
-    car_files, track_files = extract_and_filter_zip(
-        zip_file_path, cars_output_dir, tracks_output_dir
+    # Define the local Assetto Corsa directory
+    assetto_corsa_dir = (
+        r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\content"
     )
 
-    # Upload filtered files to GCS
-    if car_files:
-        upload_files_to_gcs(car_files, "gcp-6spd-assetto-corsa", "cars")
-    if track_files:
-        upload_files_to_gcs(track_files, "gcp-6spd-assetto-corsa", "tracks")
+    # Identify non-base content from the zip file
+    car_files, track_files = find_non_base_content(zip_file_path)
+
+    # Process car files
+    for car in car_files:
+        car_dir = os.path.join(assetto_corsa_dir, "cars", car)
+        if os.path.exists(car_dir):
+            zip_filename = os.path.join("uploads", car)
+            os.makedirs("uploads", exist_ok=True)
+            zipped_file = zip_directory(car_dir, zip_filename)
+            if zipped_file:
+                upload_file_to_gcs(zipped_file, "gcp-6spd-assetto-corsa", "cars")
+
+    # Process track files
+    for track in track_files:
+        track_dir = os.path.join(assetto_corsa_dir, "tracks", track)
+        if os.path.exists(track_dir):
+            zip_filename = os.path.join("uploads", track)
+            os.makedirs("uploads", exist_ok=True)
+            zipped_file = zip_directory(track_dir, zip_filename)
+            if zipped_file:
+                upload_file_to_gcs(zipped_file, "gcp-6spd-assetto-corsa", "tracks")
 
 
 if __name__ == "__main__":
