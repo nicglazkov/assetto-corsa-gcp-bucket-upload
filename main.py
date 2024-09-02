@@ -5,7 +5,7 @@ from google.cloud import storage
 from dotenv import load_dotenv
 from base_content import BASE_GAME_CARS, BASE_GAME_TRACKS  # Import base content
 import subprocess
-import json  # Import for reading JSON files
+import json  # Import for reading and writing JSON files
 
 # Load environment variables from .env file
 load_dotenv()
@@ -151,6 +151,39 @@ def unzip_file(zip_file_path, extract_to):
         print(f"Error unzipping file {zip_file_path}: {e}")
 
 
+def update_json_file(json_path, car_files, track_files):
+    """Update the content.json file with missing URLs."""
+    try:
+        if os.path.exists(json_path):
+            with open(json_path, "r") as json_file:
+                content = json.load(json_file)
+        else:
+            content = {"cars": {}, "track": {}}
+
+        # Update cars
+        for car in car_files:
+            if car not in content["cars"] or not content["cars"][car].get("url"):
+                content["cars"][car] = {
+                    "url": f"https://storage.googleapis.com/{bucket_name}/cars/{car}.zip"
+                }
+
+        # Update tracks
+        for track in track_files:
+            if track not in content["track"] or not content["track"].get("url"):
+                content["track"][track] = {
+                    "url": f"https://storage.googleapis.com/{bucket_name}/tracks/{track}.zip"
+                }
+
+        # Save the updated content back to the JSON file
+        with open(json_path, "w") as json_file:
+            json.dump(content, json_file, indent=2)
+
+        print(f"Updated {json_path} with missing URLs.")
+
+    except Exception as e:
+        print(f"Error updating JSON file {json_path}: {e}")
+
+
 def print_json_content(file_path):
     """Prints the contents of a JSON file if it exists."""
     try:
@@ -239,10 +272,13 @@ def main():
         os.makedirs(unzip_directory, exist_ok=True)
         unzip_file(zip_file_path, unzip_directory)
 
-        # Print the contents of content.json if it exists
+        # Update the JSON file with missing URLs
         content_json_path = os.path.join(
             unzip_directory, "cfg", "cm_content", "content.json"
         )
+        update_json_file(content_json_path, car_files, track_files)
+
+        # Print the contents of content.json if it exists
         print_json_content(content_json_path)
 
     except Exception as e:
