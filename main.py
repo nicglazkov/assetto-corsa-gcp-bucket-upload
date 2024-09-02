@@ -28,6 +28,7 @@ assetto_corsa_dir = os.getenv("ASSETTO_CORSA_DIR")
 vm_instance_name = os.getenv("GCP_VM_INSTANCE_NAME")  # VM instance name
 vm_zone = os.getenv("GCP_VM_ZONE")  # VM zone
 vm_destination_path = os.getenv("GCP_VM_DESTINATION_PATH")  # VM destination path
+vm_user = os.getenv("GCP_VM_USER")  # VM user
 
 # Verify that all required environment variables are set
 if (
@@ -37,6 +38,7 @@ if (
     or not vm_instance_name
     or not vm_zone
     or not vm_destination_path
+    or not vm_user  # Check for VM user
 ):
     logging.error(
         "Error: Missing required environment variables. Please check your .env file."
@@ -155,11 +157,62 @@ def upload_file_to_gcs(file_path, bucket_name, destination_path):
         logging.error(f"Error uploading file {file_path} to GCS: {e}")
 
 
+def create_remote_directory(vm_instance_name, vm_zone, remote_path):
+    """Creates a directory on the remote VM using gcloud compute ssh."""
+    try:
+        # Dynamically find the gcloud path
+        gcloud_path = find_gcloud_path()
+
+        # Ensure the remote path is correctly formatted for Unix
+        corrected_remote_path = remote_path.replace("\\", "/")
+
+        # Ensure remote path starts with a Unix root (/)
+        if not corrected_remote_path.startswith("/"):
+            corrected_remote_path = "/" + corrected_remote_path
+
+        # Construct the SSH command to create the directory
+        ssh_command = [
+            gcloud_path,
+            "compute",
+            "ssh",
+            vm_instance_name,
+            "--zone",
+            vm_zone,
+            "--command",
+            f"mkdir -p '{corrected_remote_path}'",  # Use single quotes to ensure Unix-style path
+        ]
+
+        # Execute the command
+        logging.info(
+            f"Creating remote directory {corrected_remote_path} on VM instance..."
+        )
+
+        subprocess.run(
+            ssh_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+
+        logging.info(
+            f"Successfully created remote directory {corrected_remote_path} on VM instance."
+        )
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error creating remote directory on GCP VM: {e.stderr.decode()}")
+
+
 def upload_to_gcp_vm(local_file_path, destination_path):
     """Uploads the given file or directory to a specified GCP VM instance using gcloud compute scp."""
     try:
         # Dynamically find the gcloud path
         gcloud_path = find_gcloud_path()
+
+        # Convert local file path to Unix style (forward slashes)
+        corrected_local_file_path = local_file_path.replace("\\", "/")
+
+        # Ensure the remote path is properly formatted for Unix
+        corrected_destination_path = destination_path.replace("\\", "/")
+
+        # Ensure remote path starts with a Unix root (/)
+        if not corrected_destination_path.startswith("/"):
+            corrected_destination_path = "/" + corrected_destination_path
 
         # Construct the command to upload the file/directory to the VM instance
         scp_command = [
@@ -167,28 +220,38 @@ def upload_to_gcp_vm(local_file_path, destination_path):
             "compute",
             "scp",
             "--recurse",  # Add --recurse to copy directories
-            local_file_path,
-            f"{vm_instance_name}:{destination_path}",
+            corrected_local_file_path,
+            f"{vm_user}@{vm_instance_name}:{corrected_destination_path}",  # Use user from env
             "--zone",
             vm_zone,
         ]
 
-        # Execute the command
-        logging.info(f"Uploading {local_file_path} to GCP VM instance...")
+        # Log the command for debugging purposes
+        logging.info(f"Running command: {' '.join(scp_command)}")
 
-        subprocess.run(
-            scp_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        # Execute the command
+        result = subprocess.run(
+            scp_command,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
 
         logging.info(
             f"Successfully uploaded {local_file_path} to GCP VM instance at {destination_path}."
         )
+        logging.info(result.stdout.decode())  # Print command output for debugging
     except FileNotFoundError as e:
         logging.error(
             f"Error: {e}. Ensure that the gcloud CLI is installed and in your PATH."
         )
     except subprocess.CalledProcessError as e:
         logging.error(f"Error uploading file to GCP VM: {e.stderr.decode()}")
+        # Provide additional error details if permission is denied
+        if "permission denied" in e.stderr.decode().lower():
+            logging.error(
+                "Permission denied. Check directory ownership and permissions on the remote VM."
+            )
 
 
 def unzip_file(zip_file_path, extract_to):
@@ -353,11 +416,14 @@ def main():
         # Print the contents of content.json if it exists
         print_json_content(content_json_path)
 
+        # Create the remote directory on the VM if it doesn't exist
+        create_remote_directory(vm_instance_name, vm_zone, "/home/nic/assetto")
+
         # Upload folders to GCP VM
         for folder in ["cfg", "content", "system"]:
             folder_path = os.path.join(unzip_directory, folder)
             if os.path.exists(folder_path):
-                upload_to_gcp_vm(folder_path, vm_destination_path)
+                upload_to_gcp_vm(folder_path, "/home/nic/assetto")
             else:
                 logging.warning(f"Folder {folder} does not exist. Skipping upload.")
 
