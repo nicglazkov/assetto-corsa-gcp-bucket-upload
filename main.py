@@ -413,12 +413,23 @@ def start_service_remote():
 
 
 def check_service_status_remote():
-    """Checks if the Assetto Corsa service is running on the remote VM."""
+    """Checks if the Assetto Corsa service is running or has failed on the remote VM."""
     try:
-        status_command = "sudo systemctl is-active assetto.service"
-        # Check the service status
-        if not execute_remote_command(vm_instance_name, vm_zone, status_command):
-            return False
+        # Check if the service is active
+        active_command = "sudo systemctl is-active assetto.service"
+        if not execute_remote_command(vm_instance_name, vm_zone, active_command):
+            logging.info("Assetto Corsa service is not active.")
+
+            # Check if the service has failed
+            failed_command = "sudo systemctl is-failed assetto.service"
+            if execute_remote_command(vm_instance_name, vm_zone, failed_command):
+                logging.error("Assetto Corsa service has failed.")
+                get_service_logs_remote()  # Fetch and analyze logs
+                return False
+            else:
+                logging.error("Assetto Corsa service is not active and has not failed.")
+                get_service_logs_remote()
+                return False
 
         logging.info("Checked service status successfully.")
         return True
@@ -428,6 +439,42 @@ def check_service_status_remote():
     except Exception as e:
         logging.error(f"Unexpected error checking service status: {e}")
         return False
+
+
+def get_service_logs_remote():
+    """Fetches and analyzes the last few lines of the Assetto Corsa service logs on the remote VM."""
+    try:
+        log_command = "sudo journalctl -u assetto.service -n 20 --no-pager"
+        log_output = subprocess.run(
+            [
+                "gcloud",
+                "compute",
+                "ssh",
+                vm_instance_name,
+                "--zone",
+                vm_zone,
+                "--command",
+                log_command,
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        logs = log_output.stdout.decode()
+        logging.info(f"Service logs:\n{logs}")
+
+        # Analyze the logs for known errors
+        if "No track params found" in logs:
+            logging.error("Configuration error detected: Missing track parameters.")
+        elif "Error executing critical background service" in logs:
+            logging.error("Service encountered a critical error.")
+        else:
+            logging.info("No specific errors detected in the service logs.")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error fetching service logs: {e.stderr.decode()}")
+    except Exception as e:
+        logging.error(f"Unexpected error fetching service logs: {e}")
 
 
 def main():
