@@ -5,6 +5,7 @@ from google.cloud import storage
 from dotenv import load_dotenv
 from base_content import BASE_GAME_CARS, BASE_GAME_TRACKS  # Import base content
 import subprocess
+import json  # Import for reading JSON files
 
 # Load environment variables from .env file
 load_dotenv()
@@ -140,6 +141,29 @@ def upload_to_gcp_vm(local_file_path):
         print(f"Error uploading file to GCP VM: {e.stderr.decode()}")
 
 
+def unzip_file(zip_file_path, extract_to):
+    """Unzip the file to the specified directory."""
+    try:
+        with ZipFile(zip_file_path, "r") as zip_ref:
+            zip_ref.extractall(extract_to)
+        print(f"Unzipped {zip_file_path} to {extract_to}.")
+    except Exception as e:
+        print(f"Error unzipping file {zip_file_path}: {e}")
+
+
+def print_json_content(file_path):
+    """Prints the contents of a JSON file if it exists."""
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, "r") as json_file:
+                content = json.load(json_file)
+                print(f"Contents of {file_path}:\n{json.dumps(content, indent=2)}")
+        else:
+            print(f"{file_path} does not exist.")
+    except Exception as e:
+        print(f"Error reading JSON file {file_path}: {e}")
+
+
 def main():
     try:
         # Get user input for zip file
@@ -209,6 +233,17 @@ def main():
                     upload_to_gcp_vm(zipped_file)  # Upload to VM
             else:
                 print(f"Track directory does not exist: {track_dir}")
+
+        # Unzip the original zip file locally after processing
+        unzip_directory = os.path.join("uploads", "unzipped_content")
+        os.makedirs(unzip_directory, exist_ok=True)
+        unzip_file(zip_file_path, unzip_directory)
+
+        # Print the contents of content.json if it exists
+        content_json_path = os.path.join(
+            unzip_directory, "cfg", "cm_content", "content.json"
+        )
+        print_json_content(content_json_path)
 
     except Exception as e:
         print(f"An error occurred: {e}")
