@@ -7,13 +7,19 @@ from base_content import BASE_GAME_CARS, BASE_GAME_TRACKS  # Import base content
 import subprocess
 import json  # Import for reading and writing JSON files
 import urllib.parse  # Import for URL encoding
+import logging  # Import for logging
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Print environment variables for debugging
-print("GCP_BUCKET_NAME:", os.getenv("GCP_BUCKET_NAME"))
-print("ASSETTO_CORSA_DIR:", os.getenv("ASSETTO_CORSA_DIR"))
+logging.info(f"GCP_BUCKET_NAME: {os.getenv('GCP_BUCKET_NAME')}")
+logging.info(f"ASSETTO_CORSA_DIR: {os.getenv('ASSETTO_CORSA_DIR')}")
 
 # Load environment-specific variables
 gcp_credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -32,7 +38,9 @@ if (
     or not vm_zone
     or not vm_destination_path
 ):
-    print("Error: Missing required environment variables. Please check your .env file.")
+    logging.error(
+        "Error: Missing required environment variables. Please check your .env file."
+    )
     exit(1)
 
 # Set the environment variable for Google Cloud authentication
@@ -60,7 +68,7 @@ def find_non_base_content(zip_file_path):
         return list(car_files_to_upload), list(track_files_to_upload)
 
     except Exception as e:
-        print(f"Error reading zip file: {e}")
+        logging.error(f"Error reading zip file: {e}")
         return [], []
 
 
@@ -68,10 +76,10 @@ def zip_directory(source_dir, output_filename):
     """Zip the specified directory."""
     try:
         shutil.make_archive(output_filename, "zip", source_dir)
-        print(f"Zipped {source_dir} to {output_filename}.zip")
+        logging.info(f"Zipped {source_dir} to {output_filename}.zip")
         return f"{output_filename}.zip"
     except Exception as e:
-        print(f"Error zipping directory {source_dir}: {e}")
+        logging.error(f"Error zipping directory {source_dir}: {e}")
         return None
 
 
@@ -83,7 +91,7 @@ def file_exists_in_gcs(bucket_name, destination_blob_name):
         blob = bucket.blob(destination_blob_name)
         return blob.exists()
     except Exception as e:
-        print(f"Error checking if file exists in GCS: {e}")
+        logging.error(f"Error checking if file exists in GCS: {e}")
         return False
 
 
@@ -99,9 +107,9 @@ def upload_file_to_gcs(file_path, bucket_name, destination_path):
         )
 
         # Check if file already exists in GCS
-        print(f"Checking if {destination_blob_name} exists in GCS...")
+        logging.info(f"Checking if {destination_blob_name} exists in GCS...")
         if file_exists_in_gcs(bucket_name, destination_blob_name):
-            print(
+            logging.info(
                 f"File {destination_blob_name} already exists in GCS. Skipping upload."
             )
             return
@@ -109,39 +117,42 @@ def upload_file_to_gcs(file_path, bucket_name, destination_path):
         blob = bucket.blob(destination_blob_name)
         blob.upload_from_filename(file_path)
         blob.make_public()
-        print(f"File {file_path} uploaded to {blob.public_url}")
+        logging.info(f"File {file_path} uploaded to {blob.public_url}")
     except Exception as e:
-        print(f"Error uploading file {file_path} to GCS: {e}")
+        logging.error(f"Error uploading file {file_path} to GCS: {e}")
 
 
-def upload_to_gcp_vm(local_file_path):
-    """Uploads the given file to a specified GCP VM instance using gcloud compute scp."""
+def upload_to_gcp_vm(local_file_path, destination_path):
+    """Uploads the given file or directory to a specified GCP VM instance using gcloud compute scp."""
     try:
-        # Construct the command to upload the file to the VM instance
+        # Construct the command to upload the file/directory to the VM instance
         scp_command = [
             "gcloud",
             "compute",
             "scp",
+            "--recurse",  # Add --recurse to copy directories
             local_file_path,
-            f"{vm_instance_name}:{vm_destination_path}",
+            f"{vm_instance_name}:{destination_path}",
             "--zone",
             vm_zone,
         ]
 
         # Execute the command
-        print("Uploading file to GCP VM instance...")
+        logging.info(f"Uploading {local_file_path} to GCP VM instance...")
 
         subprocess.run(
             scp_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
 
-        print(
-            f"File {local_file_path} uploaded to GCP VM instance at {vm_destination_path}."
+        logging.info(
+            f"Successfully uploaded {local_file_path} to GCP VM instance at {destination_path}."
         )
     except FileNotFoundError as e:
-        print(f"Error: {e}. Ensure that the gcloud CLI is installed and in your PATH.")
+        logging.error(
+            f"Error: {e}. Ensure that the gcloud CLI is installed and in your PATH."
+        )
     except subprocess.CalledProcessError as e:
-        print(f"Error uploading file to GCP VM: {e.stderr.decode()}")
+        logging.error(f"Error uploading file to GCP VM: {e.stderr.decode()}")
 
 
 def unzip_file(zip_file_path, extract_to):
@@ -149,9 +160,9 @@ def unzip_file(zip_file_path, extract_to):
     try:
         with ZipFile(zip_file_path, "r") as zip_ref:
             zip_ref.extractall(extract_to)
-        print(f"Unzipped {zip_file_path} to {extract_to}.")
+        logging.info(f"Unzipped {zip_file_path} to {extract_to}.")
     except Exception as e:
-        print(f"Error unzipping file {zip_file_path}: {e}")
+        logging.error(f"Error unzipping file {zip_file_path}: {e}")
 
 
 def update_json_file(json_path, car_files, track_files):
@@ -163,12 +174,12 @@ def update_json_file(json_path, car_files, track_files):
                 try:
                     content = json.load(json_file)
                 except json.JSONDecodeError:
-                    print(
+                    logging.error(
                         f"Error: {json_path} is not a valid JSON file. Resetting to an empty JSON structure."
                     )
                     content = {"cars": {}, "track": {}}
         else:
-            print(
+            logging.info(
                 f"{json_path} does not exist or is empty. Initializing a new JSON structure."
             )
             content = {"cars": {}, "track": {}}
@@ -199,10 +210,10 @@ def update_json_file(json_path, car_files, track_files):
         with open(json_path, "w") as json_file:
             json.dump(content, json_file, indent=2)
 
-        print(f"Updated {json_path} with missing URLs.")
+        logging.info(f"Updated {json_path} with missing URLs.")
 
     except Exception as e:
-        print(f"Error updating JSON file {json_path}: {e}")
+        logging.error(f"Error updating JSON file {json_path}: {e}")
 
 
 def print_json_content(file_path):
@@ -211,11 +222,13 @@ def print_json_content(file_path):
         if os.path.exists(file_path):
             with open(file_path, "r") as json_file:
                 content = json.load(json_file)
-                print(f"Contents of {file_path}:\n{json.dumps(content, indent=2)}")
+                logging.info(
+                    f"Contents of {file_path}:\n{json.dumps(content, indent=2)}"
+                )
         else:
-            print(f"{file_path} does not exist.")
+            logging.info(f"{file_path} does not exist.")
     except Exception as e:
-        print(f"Error reading JSON file {file_path}: {e}")
+        logging.error(f"Error reading JSON file {file_path}: {e}")
 
 
 def main():
@@ -225,19 +238,21 @@ def main():
 
         # Verify that the file exists
         if not os.path.exists(zip_file_path):
-            print(f"Error: The file {zip_file_path} does not exist.")
+            logging.error(f"Error: The file {zip_file_path} does not exist.")
             return
 
-        print(f"Processing zip file: {zip_file_path}")
+        logging.info(f"Processing zip file: {zip_file_path}")
 
         # Identify non-base content from the zip file
         car_files, track_files = find_non_base_content(zip_file_path)
 
         if not car_files and not track_files:
-            print("No non-base content found in the zip file. Nothing to upload.")
+            logging.info(
+                "No non-base content found in the zip file. Nothing to upload."
+            )
             return
 
-        print(
+        logging.info(
             f"Found {len(car_files)} car files and {len(track_files)} track files to upload."
         )
 
@@ -253,7 +268,7 @@ def main():
                 # Check if the zip file already exists in GCS
                 gcs_path = f"cars/{car}.zip"
                 if file_exists_in_gcs(bucket_name, gcs_path):
-                    print(
+                    logging.info(
                         f"Zip file {gcs_path} already exists in GCS. Skipping upload."
                     )
                     continue  # Skip zipping and uploading if file already exists
@@ -264,7 +279,7 @@ def main():
                     upload_file_to_gcs(zipped_file, bucket_name, "cars")
                     # upload_to_gcp_vm(zipped_file)  # Upload to VM
             else:
-                print(f"Car directory does not exist: {car_dir}")
+                logging.info(f"Car directory does not exist: {car_dir}")
 
         # Process track files
         for track in track_files:
@@ -275,7 +290,7 @@ def main():
                 # Check if the zip file already exists in GCS
                 gcs_path = f"tracks/{track}.zip"
                 if file_exists_in_gcs(bucket_name, gcs_path):
-                    print(
+                    logging.info(
                         f"Zip file {gcs_path} already exists in GCS. Skipping upload."
                     )
                     continue  # Skip zipping and uploading if file already exists
@@ -286,7 +301,7 @@ def main():
                     upload_file_to_gcs(zipped_file, bucket_name, "tracks")
                     # upload_to_gcp_vm(zipped_file)  # Upload to VM
             else:
-                print(f"Track directory does not exist: {track_dir}")
+                logging.info(f"Track directory does not exist: {track_dir}")
 
         # Unzip the original zip file locally after processing
         unzip_directory = os.path.join("uploads", "unzipped_content")
@@ -302,8 +317,16 @@ def main():
         # Print the contents of content.json if it exists
         print_json_content(content_json_path)
 
+        # Upload folders to GCP VM
+        for folder in ["cfg", "content", "system"]:
+            folder_path = os.path.join(unzip_directory, folder)
+            if os.path.exists(folder_path):
+                upload_to_gcp_vm(folder_path, vm_destination_path)
+            else:
+                logging.warning(f"Folder {folder} does not exist. Skipping upload.")
+
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.error(f"An error occurred: {e}")
 
 
 if __name__ == "__main__":
