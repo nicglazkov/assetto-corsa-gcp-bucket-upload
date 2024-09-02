@@ -8,6 +8,7 @@ import subprocess
 import json  # Import for reading and writing JSON files
 import urllib.parse  # Import for URL encoding
 import logging  # Import for logging
+import urllib.request  # Import for downloading data_track_params.ini
 
 # Set up logging
 logging.basicConfig(
@@ -117,6 +118,102 @@ def zip_directory(source_dir, output_filename):
     except Exception as e:
         logging.error(f"Error zipping directory {source_dir}: {e}")
         return None
+
+
+def unzip_file(zip_file_path, extract_to):
+    """Unzip the file to the specified directory."""
+    try:
+        with ZipFile(zip_file_path, "r") as zip_ref:
+            zip_ref.extractall(extract_to)
+        logging.info(f"Unzipped {zip_file_path} to {extract_to}.")
+    except Exception as e:
+        logging.error(f"Error unzipping file {zip_file_path}: {e}")
+
+
+def download_file(url, destination_path):
+    """Downloads a file from the specified URL to the given destination path."""
+    try:
+        logging.info(f"Downloading file from {url} to {destination_path}...")
+        urllib.request.urlretrieve(url, destination_path)
+        logging.info(f"File downloaded successfully to {destination_path}.")
+    except Exception as e:
+        logging.error(f"Error downloading file from {url}: {e}")
+
+
+def update_json_file(json_path, car_files, track_files):
+    """Update the content.json file with missing URLs, including URL encoding."""
+    try:
+        # Check if the JSON file exists and has content
+        if os.path.exists(json_path) and os.path.getsize(json_path) > 0:
+            with open(json_path, "r") as json_file:
+                try:
+                    content = json.load(json_file)
+                except json.JSONDecodeError:
+                    logging.error(
+                        f"Error: {json_path} is not a valid JSON file. Resetting to an empty JSON structure."
+                    )
+                    content = {"cars": {}, "track": {}}
+        else:
+            logging.info(
+                f"{json_path} does not exist or is empty. Initializing a new JSON structure."
+            )
+            content = {"cars": {}, "track": {}}
+
+        # Ensure the "cars" and "track" keys exist
+        if "cars" not in content:
+            content["cars"] = {}
+        if "track" not in content:
+            content["track"] = {}
+
+        # Update cars
+        for car in car_files:
+            encoded_car_name = urllib.parse.quote(car)  # URL-encode the car name
+            if car not in content["cars"] or not content["cars"][car].get("url"):
+                content["cars"][car] = {
+                    "url": f"https://storage.googleapis.com/{bucket_name}/cars/{encoded_car_name}.zip"
+                }
+
+        # Update tracks
+        for track in track_files:
+            encoded_track_name = urllib.parse.quote(track)  # URL-encode the track name
+            if track not in content["track"] or not content["track"].get("url"):
+                content["track"][track] = {
+                    "url": f"https://storage.googleapis.com/{bucket_name}/tracks/{encoded_track_name}.zip"
+                }
+
+        # Save the updated content back to the JSON file
+        with open(json_path, "w") as json_file:
+            json.dump(content, json_file, indent=2)
+
+        logging.info(f"Updated {json_path} with missing URLs.")
+
+    except Exception as e:
+        logging.error(f"Error updating JSON file {json_path}: {e}")
+
+
+def print_json_content(file_path):
+    """Prints the contents of a JSON file if it exists."""
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, "r") as json_file:
+                content = json.load(json_file)
+                logging.info(
+                    f"Contents of {file_path}:\n{json.dumps(content, indent=2)}"
+                )
+        else:
+            logging.info(f"{file_path} does not exist.")
+    except Exception as e:
+        logging.error(f"Error reading JSON file {file_path}: {e}")
+
+
+def append_to_file(file_path, text):
+    """Appends the specified text to the end of the given file."""
+    try:
+        with open(file_path, "a") as file:  # Open file in append mode
+            file.write(text)
+            logging.info(f"Appended text to {file_path}.")
+    except Exception as e:
+        logging.error(f"Error appending to file {file_path}: {e}")
 
 
 def file_exists_in_gcs(bucket_name, destination_blob_name):
@@ -255,82 +352,6 @@ def upload_to_gcp_vm(local_file_path, destination_path):
                 "Permission denied. Check directory ownership and permissions on the remote VM."
             )
         raise
-
-
-def unzip_file(zip_file_path, extract_to):
-    """Unzip the file to the specified directory."""
-    try:
-        with ZipFile(zip_file_path, "r") as zip_ref:
-            zip_ref.extractall(extract_to)
-        logging.info(f"Unzipped {zip_file_path} to {extract_to}.")
-    except Exception as e:
-        logging.error(f"Error unzipping file {zip_file_path}: {e}")
-
-
-def update_json_file(json_path, car_files, track_files):
-    """Update the content.json file with missing URLs, including URL encoding."""
-    try:
-        # Check if the JSON file exists and has content
-        if os.path.exists(json_path) and os.path.getsize(json_path) > 0:
-            with open(json_path, "r") as json_file:
-                try:
-                    content = json.load(json_file)
-                except json.JSONDecodeError:
-                    logging.error(
-                        f"Error: {json_path} is not a valid JSON file. Resetting to an empty JSON structure."
-                    )
-                    content = {"cars": {}, "track": {}}
-        else:
-            logging.info(
-                f"{json_path} does not exist or is empty. Initializing a new JSON structure."
-            )
-            content = {"cars": {}, "track": {}}
-
-        # Ensure the "cars" and "track" keys exist
-        if "cars" not in content:
-            content["cars"] = {}
-        if "track" not in content:
-            content["track"] = {}
-
-        # Update cars
-        for car in car_files:
-            encoded_car_name = urllib.parse.quote(car)  # URL-encode the car name
-            if car not in content["cars"] or not content["cars"][car].get("url"):
-                content["cars"][car] = {
-                    "url": f"https://storage.googleapis.com/{bucket_name}/cars/{encoded_car_name}.zip"
-                }
-
-        # Update tracks
-        for track in track_files:
-            encoded_track_name = urllib.parse.quote(track)  # URL-encode the track name
-            if track not in content["track"] or not content["track"].get("url"):
-                content["track"][track] = {
-                    "url": f"https://storage.googleapis.com/{bucket_name}/tracks/{encoded_track_name}.zip"
-                }
-
-        # Save the updated content back to the JSON file
-        with open(json_path, "w") as json_file:
-            json.dump(content, json_file, indent=2)
-
-        logging.info(f"Updated {json_path} with missing URLs.")
-
-    except Exception as e:
-        logging.error(f"Error updating JSON file {json_path}: {e}")
-
-
-def print_json_content(file_path):
-    """Prints the contents of a JSON file if it exists."""
-    try:
-        if os.path.exists(file_path):
-            with open(file_path, "r") as json_file:
-                content = json.load(json_file)
-                logging.info(
-                    f"Contents of {file_path}:\n{json.dumps(content, indent=2)}"
-                )
-        else:
-            logging.info(f"{file_path} does not exist.")
-    except Exception as e:
-        logging.error(f"Error reading JSON file {file_path}: {e}")
 
 
 def execute_remote_command(vm_instance_name, vm_zone, remote_command):
@@ -598,6 +619,25 @@ def main():
         unzip_directory = os.path.join("uploads", "unzipped_content")
         os.makedirs(unzip_directory, exist_ok=True)
         unzip_file(zip_file_path, unzip_directory)
+
+        # Download the `data_track_params.ini` file after unzipping
+        cfg_dir = os.path.join(unzip_directory, "cfg")
+        os.makedirs(cfg_dir, exist_ok=True)  # Ensure the cfg directory exists
+
+        ini_file_url = "https://raw.githubusercontent.com/ac-custom-shaders-patch/acc-extension-config/master/config/data_track_params.ini"
+        ini_file_path = os.path.join(cfg_dir, "data_track_params.ini")
+
+        download_file(ini_file_url, ini_file_path)
+
+        # Append the specified text to the `data_track_params.ini` file
+        additional_text = """
+        [CA-9 Saratoga]
+        NAME=CA-9 Saratoga
+        LATITUDE=37.26034168298367
+        LONGITUDE=-122.03281999062112
+        TIMEZONE=America/Los_Angeles
+        """
+        append_to_file(ini_file_path, additional_text)
 
         # Update the JSON file with missing URLs
         content_json_path = os.path.join(
