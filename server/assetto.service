@@ -1,0 +1,13 @@
+[Unit]
+Description=Assetto Corsa Server
+After=network.target
+
+[Service]
+Type=simple
+User=ac
+WorkingDirectory=/opt/ac
+ExecStart=/opt/ac/AssettoServer
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
