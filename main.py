@@ -376,7 +376,6 @@ def main():
                 zipped_file = zip_directory(car_dir, zip_filename)
                 if zipped_file:
                     upload_file_to_gcs(zipped_file, bucket_name, "cars")
-                    # upload_to_gcp_vm(zipped_file)  # Upload to VM
             else:
                 logging.info(f"Car directory does not exist: {car_dir}")
 
@@ -398,7 +397,6 @@ def main():
                 zipped_file = zip_directory(track_dir, zip_filename)
                 if zipped_file:
                     upload_file_to_gcs(zipped_file, bucket_name, "tracks")
-                    # upload_to_gcp_vm(zipped_file)  # Upload to VM
             else:
                 logging.info(f"Track directory does not exist: {track_dir}")
 
