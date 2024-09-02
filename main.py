@@ -9,6 +9,11 @@ import json  # Import for reading and writing JSON files
 import urllib.parse  # Import for URL encoding
 import logging  # Import for logging
 import urllib.request  # Import for downloading data_track_params.ini
+import colorama
+from colorama import Fore, Style
+
+# Initialize colorama
+colorama.init(autoreset=True)
 
 # Set up logging
 logging.basicConfig(
@@ -19,8 +24,8 @@ logging.basicConfig(
 load_dotenv()
 
 # Print environment variables for debugging
-logging.info(f"GCP_BUCKET_NAME: {os.getenv('GCP_BUCKET_NAME')}")
-logging.info(f"ASSETTO_CORSA_DIR: {os.getenv('ASSETTO_CORSA_DIR')}")
+logging.info(Fore.BLUE + f"GCP_BUCKET_NAME: {os.getenv('GCP_BUCKET_NAME')}")
+logging.info(Fore.BLUE + f"ASSETTO_CORSA_DIR: {os.getenv('ASSETTO_CORSA_DIR')}")
 
 # Load environment-specific variables
 gcp_credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -28,7 +33,6 @@ bucket_name = os.getenv("GCP_BUCKET_NAME")
 assetto_corsa_dir = os.getenv("ASSETTO_CORSA_DIR")
 vm_instance_name = os.getenv("GCP_VM_INSTANCE_NAME")  # VM instance name
 vm_zone = os.getenv("GCP_VM_ZONE")  # VM zone
-# vm_destination_path = os.getenv("GCP_VM_DESTINATION_PATH")  # VM destination path
 vm_destination_path = "/home/nic/assetto"  # Hardcoded for now
 vm_user = os.getenv("GCP_VM_USER")  # VM user
 
@@ -43,7 +47,8 @@ if (
     or not vm_user  # Check for VM user
 ):
     logging.error(
-        "Error: Missing required environment variables. Please check your .env file."
+        Fore.RED
+        + "Error: Missing required environment variables. Please check your .env file."
     )
     exit(1)
 
@@ -68,18 +73,20 @@ def find_gcloud_path():
         # Filter to find the correct executable path (gcloud.exe or gcloud.cmd)
         for path in paths:
             if path.endswith("gcloud.exe") or path.endswith("gcloud.cmd"):
-                logging.info(f"Found gcloud executable at: {path}")
+                logging.info(Fore.BLUE + f"Found gcloud executable at: {path}")
                 return path
 
         # If no valid executable was found, raise an error
         logging.error(
-            "Could not find a valid gcloud executable. Ensure it is installed and in your PATH."
+            Fore.RED
+            + "Could not find a valid gcloud executable. Ensure it is installed and in your PATH."
         )
         exit(1)
 
     except (FileNotFoundError, subprocess.CalledProcessError) as e:
         logging.error(
-            f"Could not find gcloud executable. Ensure it is installed and in your PATH. Error: {e}"
+            Fore.RED
+            + f"Could not find gcloud executable. Ensure it is installed and in your PATH. Error: {e}"
         )
         exit(1)
 
@@ -105,7 +112,7 @@ def find_non_base_content(zip_file_path):
         return list(car_files_to_upload), list(track_files_to_upload)
 
     except Exception as e:
-        logging.error(f"Error reading zip file: {e}")
+        logging.error(Fore.RED + f"Error reading zip file: {e}")
         return [], []
 
 
@@ -113,10 +120,10 @@ def zip_directory(source_dir, output_filename):
     """Zip the specified directory."""
     try:
         shutil.make_archive(output_filename, "zip", source_dir)
-        logging.info(f"Zipped {source_dir} to {output_filename}.zip")
+        logging.info(Fore.BLUE + f"Zipped {source_dir} to {output_filename}.zip")
         return f"{output_filename}.zip"
     except Exception as e:
-        logging.error(f"Error zipping directory {source_dir}: {e}")
+        logging.error(Fore.RED + f"Error zipping directory {source_dir}: {e}")
         return None
 
 
@@ -125,19 +132,23 @@ def unzip_file(zip_file_path, extract_to):
     try:
         with ZipFile(zip_file_path, "r") as zip_ref:
             zip_ref.extractall(extract_to)
-        logging.info(f"Unzipped {zip_file_path} to {extract_to}.")
+        logging.info(Fore.BLUE + f"Unzipped {zip_file_path} to {extract_to}.")
     except Exception as e:
-        logging.error(f"Error unzipping file {zip_file_path}: {e}")
+        logging.error(Fore.RED + f"Error unzipping file {zip_file_path}: {e}")
 
 
 def download_file(url, destination_path):
     """Downloads a file from the specified URL to the given destination path."""
     try:
-        logging.info(f"Downloading file from {url} to {destination_path}...")
+        logging.info(
+            Fore.BLUE + f"Downloading file from {url} to {destination_path}..."
+        )
         urllib.request.urlretrieve(url, destination_path)
-        logging.info(f"File downloaded successfully to {destination_path}.")
+        logging.info(
+            Fore.GREEN + f"File downloaded successfully to {destination_path}."
+        )
     except Exception as e:
-        logging.error(f"Error downloading file from {url}: {e}")
+        logging.error(Fore.RED + f"Error downloading file from {url}: {e}")
 
 
 def update_json_file(json_path, car_files, track_files):
@@ -150,12 +161,14 @@ def update_json_file(json_path, car_files, track_files):
                     content = json.load(json_file)
                 except json.JSONDecodeError:
                     logging.error(
-                        f"Error: {json_path} is not a valid JSON file. Resetting to an empty JSON structure."
+                        Fore.RED
+                        + f"Error: {json_path} is not a valid JSON file. Resetting to an empty JSON structure."
                     )
                     content = {"cars": {}, "track": {}}
         else:
             logging.info(
-                f"{json_path} does not exist or is empty. Initializing a new JSON structure."
+                Fore.BLUE
+                + f"{json_path} does not exist or is empty. Initializing a new JSON structure."
             )
             content = {"cars": {}, "track": {}}
 
@@ -185,10 +198,10 @@ def update_json_file(json_path, car_files, track_files):
         with open(json_path, "w") as json_file:
             json.dump(content, json_file, indent=2)
 
-        logging.info(f"Updated {json_path} with missing URLs.")
+        logging.info(Fore.BLUE + f"Updated {json_path} with missing URLs.")
 
     except Exception as e:
-        logging.error(f"Error updating JSON file {json_path}: {e}")
+        logging.error(Fore.RED + f"Error updating JSON file {json_path}: {e}")
 
 
 def print_json_content(file_path):
@@ -198,12 +211,13 @@ def print_json_content(file_path):
             with open(file_path, "r") as json_file:
                 content = json.load(json_file)
                 logging.info(
-                    f"Contents of {file_path}:\n{json.dumps(content, indent=2)}"
+                    Fore.BLUE
+                    + f"Contents of {file_path}:\n{json.dumps(content, indent=2)}"
                 )
         else:
-            logging.info(f"{file_path} does not exist.")
+            logging.info(Fore.BLUE + f"{file_path} does not exist.")
     except Exception as e:
-        logging.error(f"Error reading JSON file {file_path}: {e}")
+        logging.error(Fore.RED + f"Error reading JSON file {file_path}: {e}")
 
 
 def append_to_file(file_path, text):
@@ -211,9 +225,9 @@ def append_to_file(file_path, text):
     try:
         with open(file_path, "a") as file:  # Open file in append mode
             file.write(text)
-            logging.info(f"Appended text to {file_path}.")
+            logging.info(Fore.GREEN + f"Appended text to {file_path}.")
     except Exception as e:
-        logging.error(f"Error appending to file {file_path}: {e}")
+        logging.error(Fore.RED + f"Error appending to file {file_path}: {e}")
 
 
 def file_exists_in_gcs(bucket_name, destination_blob_name):
@@ -224,7 +238,7 @@ def file_exists_in_gcs(bucket_name, destination_blob_name):
         blob = bucket.blob(destination_blob_name)
         return blob.exists()
     except Exception as e:
-        logging.error(f"Error checking if file exists in GCS: {e}")
+        logging.error(Fore.RED + f"Error checking if file exists in GCS: {e}")
         return False
 
 
@@ -240,19 +254,22 @@ def upload_file_to_gcs(file_path, bucket_name, destination_path):
         )
 
         # Check if file already exists in GCS
-        logging.info(f"Checking if {destination_blob_name} exists in GCS...")
+        logging.info(
+            Fore.BLUE + f"Checking if {destination_blob_name} exists in GCS..."
+        )
         if file_exists_in_gcs(bucket_name, destination_blob_name):
             logging.info(
-                f"File {destination_blob_name} already exists in GCS. Skipping upload."
+                Fore.BLUE
+                + f"File {destination_blob_name} already exists in GCS. Skipping upload."
             )
             return
 
         blob = bucket.blob(destination_blob_name)
         blob.upload_from_filename(file_path)
         blob.make_public()
-        logging.info(f"File {file_path} uploaded to {blob.public_url}")
+        logging.info(Fore.GREEN + f"File {file_path} uploaded to {blob.public_url}")
     except Exception as e:
-        logging.error(f"Error uploading file {file_path} to GCS: {e}")
+        logging.error(Fore.RED + f"Error uploading file {file_path} to GCS: {e}")
 
 
 def create_remote_directory(vm_instance_name, vm_zone, remote_path):
@@ -282,7 +299,8 @@ def create_remote_directory(vm_instance_name, vm_zone, remote_path):
 
         # Execute the command
         logging.info(
-            f"Creating remote directory {corrected_remote_path} on VM instance..."
+            Fore.BLUE
+            + f"Creating remote directory {corrected_remote_path} on VM instance..."
         )
 
         subprocess.run(
@@ -290,10 +308,13 @@ def create_remote_directory(vm_instance_name, vm_zone, remote_path):
         )
 
         logging.info(
-            f"Successfully created remote directory {corrected_remote_path} on VM instance."
+            Fore.GREEN
+            + f"Successfully created remote directory {corrected_remote_path} on VM instance."
         )
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error creating remote directory on GCP VM: {e.stderr.decode()}")
+        logging.error(
+            Fore.RED + f"Error creating remote directory on GCP VM: {e.stderr.decode()}"
+        )
 
 
 def upload_to_gcp_vm(local_file_path, destination_path):
@@ -325,7 +346,7 @@ def upload_to_gcp_vm(local_file_path, destination_path):
         ]
 
         # Log the command for debugging purposes
-        logging.info(f"Running command: {' '.join(scp_command)}")
+        logging.info(Fore.BLUE + f"Running command: {' '.join(scp_command)}")
 
         # Execute the command
         result = subprocess.run(
@@ -336,20 +357,25 @@ def upload_to_gcp_vm(local_file_path, destination_path):
         )
 
         logging.info(
-            f"Successfully uploaded {local_file_path} to GCP VM instance at {destination_path}."
+            Fore.GREEN
+            + f"Successfully uploaded {local_file_path} to GCP VM instance at {destination_path}."
         )
-        logging.info(result.stdout.decode())  # Print command output for debugging
+        logging.info(
+            Fore.BLUE + result.stdout.decode()
+        )  # Print command output for debugging
     except FileNotFoundError as e:
         logging.error(
-            f"Error: {e}. Ensure that the gcloud CLI is installed and in your PATH."
+            Fore.RED
+            + f"Error: {e}. Ensure that the gcloud CLI is installed and in your PATH."
         )
         raise
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error uploading file to GCP VM: {e.stderr.decode()}")
+        logging.error(Fore.RED + f"Error uploading file to GCP VM: {e.stderr.decode()}")
         # Provide additional error details if permission is denied
         if "permission denied" in e.stderr.decode().lower():
             logging.error(
-                "Permission denied. Check directory ownership and permissions on the remote VM."
+                Fore.RED
+                + "Permission denied. Check directory ownership and permissions on the remote VM."
             )
         raise
 
@@ -373,17 +399,19 @@ def execute_remote_command(vm_instance_name, vm_zone, remote_command):
         ]
 
         # Execute the command
-        logging.info(f"Executing remote command: {' '.join(ssh_command)}")
+        logging.info(Fore.BLUE + f"Executing remote command: {' '.join(ssh_command)}")
         result = subprocess.run(
             ssh_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
-        logging.info("Remote command executed successfully.")
-        logging.info(result.stdout.decode())  # Print the output for debugging
+        logging.info(Fore.GREEN + "Remote command executed successfully.")
+        logging.info(
+            Fore.BLUE + result.stdout.decode()
+        )  # Print the output for debugging
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error executing remote command: {e.stderr.decode()}")
+        logging.error(Fore.RED + f"Error executing remote command: {e.stderr.decode()}")
         return False
     except Exception as e:
-        logging.error(f"Unexpected error executing remote command: {e}")
+        logging.error(Fore.RED + f"Unexpected error executing remote command: {e}")
         return False
     return True
 
@@ -393,13 +421,14 @@ def stop_service_remote():
     if not execute_remote_command(
         vm_instance_name, vm_zone, "sudo systemctl stop assetto.service"
     ):
-        logging.error("Failed to stop the Assetto Corsa service on the remote server.")
+        logging.error(
+            Fore.RED + "Failed to stop the Assetto Corsa service on the remote server."
+        )
         raise RuntimeError("Stopping the service failed.")
 
 
 def replace_directories_remote():
     """Replaces the 'cfg', 'content', 'system' directories on the remote VM."""
-    # Use the full path to the home directory from the .env file
     remote_commands = [
         "sudo rm -rf /opt/ac/cfg /opt/ac/content /opt/ac/system",  # Remove existing directories
         f"sudo mv {vm_destination_path}/cfg /opt/ac/",  # Move the new 'cfg' directory
@@ -410,42 +439,38 @@ def replace_directories_remote():
 
     for command in remote_commands:
         if not execute_remote_command(vm_instance_name, vm_zone, command):
-            logging.error(f"Failed to execute command: {command}")
+            logging.error(Fore.RED + f"Failed to execute command: {command}")
             raise RuntimeError("Directory replacement failed.")
 
 
 def start_service_remote():
     """Starts the Assetto Corsa service on the remote VM and checks if it started successfully."""
-    # Start the service
     if not execute_remote_command(
         vm_instance_name, vm_zone, "sudo systemctl start assetto.service"
     ):
-        logging.error("Failed to start the Assetto Corsa service on the remote server.")
+        logging.error(
+            Fore.RED + "Failed to start the Assetto Corsa service on the remote server."
+        )
         raise RuntimeError("Starting the service failed.")
 
-    # Check the service status
     if not check_service_status_remote():
         logging.error(
-            "Assetto Corsa service did not start successfully on the remote server."
+            Fore.RED
+            + "Assetto Corsa service did not start successfully on the remote server."
         )
         raise RuntimeError("Service start failed.")
     else:
-        logging.info("Assetto Corsa service started successfully on the remote server.")
-
-    # Display full output of the service status
-    # get_full_service_status_remote()
+        logging.info(
+            Fore.GREEN
+            + "Assetto Corsa service started successfully on the remote server."
+        )
 
 
 def get_full_service_status_remote():
     """Fetches and displays the full output of the Assetto Corsa service status on the remote VM."""
     try:
-        # Dynamically find the gcloud path
         gcloud_path = find_gcloud_path()
-
-        # Define the command to check the full service status
         status_command = "sudo systemctl status assetto.service --no-pager"
-
-        # Construct the SSH command
         ssh_command = [
             gcloud_path,
             "compute",
@@ -457,55 +482,54 @@ def get_full_service_status_remote():
             status_command,
         ]
 
-        # Execute the command
-        logging.info(f"Executing remote command: {' '.join(ssh_command)}")
+        logging.info(Fore.BLUE + f"Executing remote command: {' '.join(ssh_command)}")
         result = subprocess.run(
             ssh_command,
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-
-        # Decode and log the full service status output
         status_output = result.stdout.decode()
-        logging.info(f"Full service status:\n{status_output}")
+        logging.info(Fore.BLUE + f"Full service status:\n{status_output}")
 
     except FileNotFoundError as e:
         logging.error(
-            f"Error: {e}. Ensure that the gcloud CLI is installed and in your PATH."
+            Fore.RED
+            + f"Error: {e}. Ensure that the gcloud CLI is installed and in your PATH."
         )
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error fetching full service status: {e.stderr.decode()}")
+        logging.error(
+            Fore.RED + f"Error fetching full service status: {e.stderr.decode()}"
+        )
     except Exception as e:
-        logging.error(f"Unexpected error fetching full service status: {e}")
+        logging.error(Fore.RED + f"Unexpected error fetching full service status: {e}")
 
 
 def check_service_status_remote():
     """Checks if the Assetto Corsa service is running or has failed on the remote VM."""
     try:
-        # Check if the service is active
         active_command = "sudo systemctl is-active assetto.service"
         if not execute_remote_command(vm_instance_name, vm_zone, active_command):
-            logging.info("Assetto Corsa service is not active.")
-
-            # Check if the service has failed
+            logging.info(Fore.BLUE + "Assetto Corsa service is not active.")
             failed_command = "sudo systemctl is-failed assetto.service"
             if execute_remote_command(vm_instance_name, vm_zone, failed_command):
-                logging.error("Assetto Corsa service has failed.")
-                get_service_logs_remote()  # Fetch and analyze logs
+                logging.error(Fore.RED + "Assetto Corsa service has failed.")
+                get_service_logs_remote()
                 return False
             else:
-                logging.error("Assetto Corsa service is not active and has not failed.")
+                logging.error(
+                    Fore.RED + "Assetto Corsa service is not active and has not failed."
+                )
                 get_service_logs_remote()
                 return False
 
-        logging.info("Checked service status successfully.")
+        logging.info(Fore.GREEN + "Checked service status successfully.")
         return True
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error checking service status: {e.stderr.decode()}")
+        logging.error(Fore.RED + f"Error checking service status: {e.stderr.decode()}")
         return False
     except Exception as e:
-        logging.error(f"Unexpected error checking service status: {e}")
+        logging.error(Fore.RED + f"Unexpected error checking service status: {e}")
         return False
 
 
@@ -530,19 +554,21 @@ def get_service_logs_remote():
         )
 
         logs = log_output.stdout.decode()
-        logging.info(f"Service logs:\n{logs}")
+        logging.info(Fore.BLUE + f"Service logs:\n{logs}")
 
         # Analyze the logs for known errors
         if "No track params found" in logs:
-            logging.error("Configuration error detected: Missing track parameters.")
+            logging.error(
+                Fore.RED + "Configuration error detected: Missing track parameters."
+            )
         elif "Error executing critical background service" in logs:
-            logging.error("Service encountered a critical error.")
+            logging.error(Fore.RED + "Service encountered a critical error.")
         else:
-            logging.info("No specific errors detected in the service logs.")
+            logging.info(Fore.BLUE + "No specific errors detected in the service logs.")
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error fetching service logs: {e.stderr.decode()}")
+        logging.error(Fore.RED + f"Error fetching service logs: {e.stderr.decode()}")
     except Exception as e:
-        logging.error(f"Unexpected error fetching service logs: {e}")
+        logging.error(Fore.RED + f"Unexpected error fetching service logs: {e}")
 
 
 def main():
@@ -552,22 +578,24 @@ def main():
 
         # Verify that the file exists
         if not os.path.exists(zip_file_path):
-            logging.error(f"Error: The file {zip_file_path} does not exist.")
+            logging.error(Fore.RED + f"Error: The file {zip_file_path} does not exist.")
             return
 
-        logging.info(f"Processing zip file: {zip_file_path}")
+        logging.info(Fore.BLUE + f"Processing zip file: {zip_file_path}")
 
         # Identify non-base content from the zip file
         car_files, track_files = find_non_base_content(zip_file_path)
 
         if not car_files and not track_files:
             logging.info(
-                "No non-base content found in the zip file. Nothing to upload."
+                Fore.BLUE
+                + "No non-base content found in the zip file. Nothing to upload."
             )
             return
 
         logging.info(
-            f"Found {len(car_files)} car files and {len(track_files)} track files to upload."
+            Fore.BLUE
+            + f"Found {len(car_files)} car files and {len(track_files)} track files to upload."
         )
 
         # Prepare directories for zipping and uploading
@@ -583,7 +611,8 @@ def main():
                 gcs_path = f"cars/{car}.zip"
                 if file_exists_in_gcs(bucket_name, gcs_path):
                     logging.info(
-                        f"Zip file {gcs_path} already exists in GCS. Skipping upload."
+                        Fore.BLUE
+                        + f"Zip file {gcs_path} already exists in GCS. Skipping upload."
                     )
                     continue  # Skip zipping and uploading if file already exists
 
@@ -592,7 +621,7 @@ def main():
                 if zipped_file:
                     upload_file_to_gcs(zipped_file, bucket_name, "cars")
             else:
-                logging.info(f"Car directory does not exist: {car_dir}")
+                logging.info(Fore.BLUE + f"Car directory does not exist: {car_dir}")
 
         # Process track files
         for track in track_files:
@@ -604,7 +633,8 @@ def main():
                 gcs_path = f"tracks/{track}.zip"
                 if file_exists_in_gcs(bucket_name, gcs_path):
                     logging.info(
-                        f"Zip file {gcs_path} already exists in GCS. Skipping upload."
+                        Fore.BLUE
+                        + f"Zip file {gcs_path} already exists in GCS. Skipping upload."
                     )
                     continue  # Skip zipping and uploading if file already exists
 
@@ -613,7 +643,7 @@ def main():
                 if zipped_file:
                     upload_file_to_gcs(zipped_file, bucket_name, "tracks")
             else:
-                logging.info(f"Track directory does not exist: {track_dir}")
+                logging.info(Fore.BLUE + f"Track directory does not exist: {track_dir}")
 
         # Unzip the original zip file locally after processing
         unzip_directory = os.path.join("uploads", "unzipped_content")
@@ -657,7 +687,9 @@ def main():
             if os.path.exists(folder_path):
                 upload_to_gcp_vm(folder_path, vm_destination_path)
             else:
-                logging.warning(f"Folder {folder} does not exist. Skipping upload.")
+                logging.warning(
+                    Fore.BLUE + f"Folder {folder} does not exist. Skipping upload."
+                )
 
         # Stop the Assetto Corsa service on the remote server
         stop_service_remote()
@@ -669,9 +701,9 @@ def main():
         start_service_remote()
 
     except RuntimeError as e:
-        logging.error(f"A runtime error occurred: {e}")
+        logging.error(Fore.RED + f"A runtime error occurred: {e}")
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {e}")
+        logging.error(Fore.RED + f"An unexpected error occurred: {e}")
 
 
 if __name__ == "__main__":
