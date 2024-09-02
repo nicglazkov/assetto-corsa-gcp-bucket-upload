@@ -394,12 +394,40 @@ def replace_directories_remote():
 
 
 def start_service_remote():
-    """Starts the Assetto Corsa service on the remote VM."""
+    """Starts the Assetto Corsa service on the remote VM and checks if it started successfully."""
+    # Start the service
     if not execute_remote_command(
         vm_instance_name, vm_zone, "sudo systemctl start assetto.service"
     ):
         logging.error("Failed to start the Assetto Corsa service on the remote server.")
         raise RuntimeError("Starting the service failed.")
+
+    # Check the service status
+    if not check_service_status_remote():
+        logging.error(
+            "Assetto Corsa service did not start successfully on the remote server."
+        )
+        raise RuntimeError("Service start failed.")
+    else:
+        logging.info("Assetto Corsa service started successfully on the remote server.")
+
+
+def check_service_status_remote():
+    """Checks if the Assetto Corsa service is running on the remote VM."""
+    try:
+        status_command = "sudo systemctl is-active assetto.service"
+        # Check the service status
+        if not execute_remote_command(vm_instance_name, vm_zone, status_command):
+            return False
+
+        logging.info("Checked service status successfully.")
+        return True
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error checking service status: {e.stderr.decode()}")
+        return False
+    except Exception as e:
+        logging.error(f"Unexpected error checking service status: {e}")
+        return False
 
 
 def main():
