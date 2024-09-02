@@ -125,14 +125,17 @@ def main():
 
     # Process car files
     for car in car_files:
-        # Construct the correct path for the car directory on the local drive
-        print(f"ASSETTO_CORSA_DIR: {assetto_corsa_dir}")
-        car_dir = os.path.join(
-            assetto_corsa_dir, "cars", car
-        )  # Correct path construction
-        print(f"Constructed car directory: {car_dir}")
+        car_dir = os.path.join(assetto_corsa_dir, "cars", car)
         if os.path.exists(car_dir):
             zip_filename = os.path.join("uploads", car)
+
+            # Check if the zip file already exists in GCS
+            gcs_path = f"cars/{car}.zip"
+            if file_exists_in_gcs(bucket_name, gcs_path):
+                print(f"Zip file {gcs_path} already exists in GCS. Skipping upload.")
+                continue  # Skip zipping and uploading if file already exists
+
+            # Zip and upload the car directory
             zipped_file = zip_directory(car_dir, zip_filename)
             if zipped_file:
                 upload_file_to_gcs(zipped_file, bucket_name, "cars")
@@ -141,12 +144,17 @@ def main():
 
     # Process track files
     for track in track_files:
-        # Construct the correct path for the track directory on the local drive
-        track_dir = os.path.join(
-            assetto_corsa_dir, "tracks", track
-        )  # Correct path construction
+        track_dir = os.path.join(assetto_corsa_dir, "tracks", track)
         if os.path.exists(track_dir):
             zip_filename = os.path.join("uploads", track)
+
+            # Check if the zip file already exists in GCS
+            gcs_path = f"tracks/{track}.zip"
+            if file_exists_in_gcs(bucket_name, gcs_path):
+                print(f"Zip file {gcs_path} already exists in GCS. Skipping upload.")
+                continue  # Skip zipping and uploading if file already exists
+
+            # Zip and upload the track directory
             zipped_file = zip_directory(track_dir, zip_filename)
             if zipped_file:
                 upload_file_to_gcs(zipped_file, bucket_name, "tracks")
